@@ -1,12 +1,12 @@
 # 247 Agent Dockerfile
 # Runs the agent server with terminal support via tmux
 
-# Use bookworm (Debian 12) - has glibc needed by node-pty and better-sqlite3
-FROM node:20-bookworm-slim
+# Node 22 requerido por engines field en package.json
+FROM node:22-bookworm-slim
 
 # Install system dependencies:
 # - tmux, git, curl, bash: runtime needs
-# - python3, make, g++, build-essential: required to compile native modules
+# - python3, make, g++, build-essential: compile native modules
 #   (node-pty-prebuilt-multiarch and better-sqlite3)
 RUN apt-get update && apt-get install -y \
     tmux \
@@ -25,21 +25,21 @@ RUN npm install -g pnpm
 # Create app directory
 WORKDIR /app
 
-# Copy workspace/root config files first (for layer caching)
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+# Copy workspace/root config files (INCLUYENDO tsconfig.json raiz)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.json ./
 
-# Copy package.json of each workspace package (for install caching)
+# Copy package.json de cada workspace (para cache de install)
 COPY apps/agent/package.json ./apps/agent/
 COPY packages/shared/package.json ./packages/shared/
 
-# Install ALL dependencies (including devDependencies needed for build)
+# Install ALL dependencies
 RUN pnpm install --frozen-lockfile
 
 # Copy source code
 COPY apps/agent/ ./apps/agent/
 COPY packages/shared/ ./packages/shared/
 
-# Build: shared MUST be built before agent
+# Build: shared PRIMERO, luego agent
 RUN pnpm --filter 247-shared build && pnpm --filter 247-agent build
 
 # Create persistent data directory for SQLite
