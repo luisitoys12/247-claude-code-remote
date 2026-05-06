@@ -1,9 +1,11 @@
 # fly.toml - 247 Claude Code Remote Agent
+# Deploy desde: cd claude-remote-control && fly deploy
 app = "247-claude-agent"
 primary_region = "mia"
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = "./Dockerfile"
+  build-target = ""
 
 [env]
   PORT = "4678"
