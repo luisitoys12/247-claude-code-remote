@@ -1,0 +1,32 @@
+# fly.toml - 247 Claude Code Remote Agent
+app = "247-claude-agent"
+primary_region = "mia"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "4678"
+  NODE_ENV = "production"
+
+[http_service]
+  internal_port = 4678
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 25
+    soft_limit = 20
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
+
+[[mounts]]
+  source = "agent_data"
+  destination = "/root/.247/data"
+  initial_size = "1gb"
