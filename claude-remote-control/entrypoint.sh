@@ -1,14 +1,18 @@
 #!/bin/sh
 set -e
 
-mkdir -p /root/.247/data
+# Directorios en el volumen persistente /data
+mkdir -p /data/agent
+mkdir -p /data/.ollama/models
 mkdir -p /root/projects
-mkdir -p /root/.ollama/models
 mkdir -p /var/log/supervisor
 mkdir -p /var/log/nginx
 
-# ── Config del agent si no existe ──
-CONFIG_FILE="/root/.247/config.json"
+# Symlink para que Ollama encuentre sus modelos en el volumen
+export OLLAMA_MODELS=/data/.ollama/models
+
+# Config del agent
+CONFIG_FILE="/data/agent/config.json"
 if [ ! -f "$CONFIG_FILE" ]; then
   echo "[entrypoint] Creando config default del agent..."
   cat > "$CONFIG_FILE" << 'EOF'
@@ -28,24 +32,22 @@ if [ ! -f "$CONFIG_FILE" ]; then
 EOF
 fi
 
-# ── Info de providers disponibles ──
+# Info de providers
 echo "[entrypoint] Ollama: interno en http://127.0.0.1:11434"
 [ -n "$OPENROUTER_API_KEY" ] \
   && echo "[entrypoint] OpenRouter: OK" \
   || echo "[entrypoint] OpenRouter: no configurado (opcional)"
 
-# ── Pull automático de modelo si se especifica DEFAULT_OLLAMA_MODEL ──
-# Ejemplo: fly secrets set DEFAULT_OLLAMA_MODEL=qwen2.5-coder:7b
-# El pull ocurre en background para no bloquear el arranque
+# Pull automatico de modelo en background
 if [ -n "$DEFAULT_OLLAMA_MODEL" ]; then
-  echo "[entrypoint] Se descargará el modelo '$DEFAULT_OLLAMA_MODEL' tras arrancar Ollama..."
+  echo "[entrypoint] Se descargara el modelo '$DEFAULT_OLLAMA_MODEL' tras arrancar Ollama..."
   (
-    sleep 15  # esperar a que ollama serve esté listo
+    sleep 15
     ollama pull "$DEFAULT_OLLAMA_MODEL" && \
       echo "[entrypoint] Modelo '$DEFAULT_OLLAMA_MODEL' listo" || \
-      echo "[entrypoint] WARN: falló el pull de '$DEFAULT_OLLAMA_MODEL'"
+      echo "[entrypoint] WARN: fallo el pull de '$DEFAULT_OLLAMA_MODEL'"
   ) &
 fi
 
-echo "[entrypoint] Iniciando supervisord (ollama + agent + web + nginx)..."
+echo "[entrypoint] Iniciando supervisord..."
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
