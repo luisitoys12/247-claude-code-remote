@@ -25,7 +25,7 @@ RUN npm install -g pnpm
 # Create app directory
 WORKDIR /app
 
-# Copy workspace/root config files (INCLUYENDO tsconfig.json raiz)
+# Copy workspace/root config files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.json ./
 
 # Copy package.json de cada workspace (para cache de install)
@@ -42,8 +42,10 @@ COPY packages/shared/ ./packages/shared/
 # Build: shared PRIMERO, luego agent
 RUN pnpm --filter 247-shared build && pnpm --filter 247-agent build
 
-# Create persistent data directory for SQLite
-RUN mkdir -p /root/.247/data
+# Create persistent data directory and default config so app starts without init
+RUN mkdir -p /root/.247/data && \
+    echo '{"machine":{"id":"fly-agent","name":"247-fly-agent"},"agent":{"port":4678},"projects":{"basePath":"/root/projects","whitelist":[]}}' \
+    > /root/.247/config.json
 
 # Expose port
 EXPOSE 4678

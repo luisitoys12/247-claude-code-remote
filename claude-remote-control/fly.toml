@@ -1,5 +1,5 @@
 # fly.toml - 247 Claude Code Remote Agent
-# Deploy desde: cd claude-remote-control && fly deploy --app 247-claude-code-remote
+# Deploy desde: cd claude-remote-control && fly deploy
 app = "247-claude-code-remote"
 primary_region = "dfw"
 
@@ -9,6 +9,7 @@ primary_region = "dfw"
 [env]
   PORT = "4678"
   NODE_ENV = "production"
+  HOME = "/root"
 
 [http_service]
   internal_port = 4678
