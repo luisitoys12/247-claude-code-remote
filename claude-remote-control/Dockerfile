@@ -37,7 +37,7 @@ RUN apt-get update && apt-get install -y \
     zstd \
     && rm -rf /var/lib/apt/lists/*
 
-# Instalar Ollama (binario oficial)
+# Instalar Ollama y configurar para usar /data/.ollama (volumen unificado)
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
 RUN npm install -g pnpm
@@ -62,8 +62,8 @@ COPY supervisord.conf   /etc/supervisor/conf.d/supervisord.conf
 COPY entrypoint.sh      /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Directorio de modelos Ollama en volumen persistente
-VOLUME ["/root/.ollama"]
+# Volumen unificado: /data/.ollama = modelos, /data/agent = datos del agent
+VOLUME ["/data"]
 
 EXPOSE 8080
 
