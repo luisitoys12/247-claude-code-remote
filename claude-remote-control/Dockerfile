@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────
-# Stage 1: Build — compila agent + web Next.js
+# Stage 1: Build — compila shared + agent
 # ─────────────────────────────────────────────────────────────
 FROM node:22-bookworm-slim AS builder
 
@@ -13,19 +13,16 @@ WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.json ./
 COPY apps/agent/package.json        ./apps/agent/
-COPY apps/web/package.json          ./apps/web/
 COPY packages/shared/package.json   ./packages/shared/
 
 RUN pnpm install --frozen-lockfile
 
 COPY apps/agent/      ./apps/agent/
-COPY apps/web/        ./apps/web/
 COPY packages/shared/ ./packages/shared/
 
-# Build en orden: shared → agent → web
+# Build en orden: shared → agent
 RUN pnpm --filter 247-shared build
 RUN pnpm --filter 247-agent  build
-RUN pnpm --filter web        build
 
 # ─────────────────────────────────────────────────────────────
 # Stage 2: Runtime — imagen final con Ollama + nginx + supervisor
@@ -55,11 +52,6 @@ COPY --from=builder /app/tsconfig.json        ./
 
 COPY --from=builder /app/apps/agent/          ./apps/agent/
 COPY --from=builder /app/packages/shared/     ./packages/shared/
-
-COPY --from=builder /app/apps/web/package.json     ./apps/web/
-COPY --from=builder /app/apps/web/.next/            ./apps/web/.next/
-COPY --from=builder /app/apps/web/public/           ./apps/web/public/
-COPY --from=builder /app/apps/web/next.config.js    ./apps/web/next.config.js
 
 RUN pnpm install --frozen-lockfile --prod
 
