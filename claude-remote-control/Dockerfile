@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────
-# Stage 1: Build — compila shared + agent
+# Stage 1: Build Node — compila shared + agent
 # ─────────────────────────────────────────────────────────────
 FROM node:22-bookworm-slim AS builder
 
@@ -24,27 +24,41 @@ RUN pnpm --filter 247-shared build
 RUN pnpm --filter 247-agent  build
 
 # ─────────────────────────────────────────────────────────────
-# Stage 2: Runtime — Ollama + Agent + Open WebUI + nginx
+# Stage 2: Build Python — instala open-webui CPU-only en venv separado
+# (stage separado para que el cache de pip no invalide el runtime)
 # ─────────────────────────────────────────────────────────────
-FROM node:22-bookworm-slim AS runtime
+FROM python:3.11-slim AS pybuilder
 
 RUN apt-get update && apt-get install -y \
-    tmux git curl bash ca-certificates \
-    nginx supervisor \
-    python3 python3-pip python3-venv \
-    make g++ build-essential \
-    zstd ffmpeg libsm6 libxext6 \
+    build-essential curl ffmpeg libsm6 libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
-# Instalar Ollama
-RUN curl -fsSL https://ollama.com/install.sh | sh
-
-# Instalar Open WebUI en virtualenv — CPU-only torch para reducir imagen (<8GB Fly.io limit)
+# CPU-only torch + open-webui, sin cache pip
 RUN python3 -m venv /opt/webui-venv && \
     /opt/webui-venv/bin/pip install --upgrade pip --no-cache-dir && \
     /opt/webui-venv/bin/pip install --no-cache-dir \
-        --extra-index-url https://download.pytorch.org/whl/cpu \
-        open-webui
+        torch torchvision torchaudio \
+        --index-url https://download.pytorch.org/whl/cpu && \
+    /opt/webui-venv/bin/pip install --no-cache-dir open-webui
+
+# ─────────────────────────────────────────────────────────────
+# Stage 3: Runtime final — solo lo necesario para correr
+# ─────────────────────────────────────────────────────────────
+FROM node:22-bookworm-slim AS runtime
+
+# Solo dependencias de runtime, SIN build tools (g++, make, build-essential)
+RUN apt-get update && apt-get install -y \
+    tmux git curl bash ca-certificates \
+    nginx supervisor \
+    python3 python3-venv \
+    zstd ffmpeg libsm6 libxext6 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar venv con open-webui ya instalado desde pybuilder
+COPY --from=pybuilder /opt/webui-venv /opt/webui-venv
+
+# Instalar Ollama
+RUN curl -fsSL https://ollama.com/install.sh | sh
 
 RUN npm install -g pnpm
 
@@ -65,7 +79,7 @@ COPY supervisord.conf   /etc/supervisor/conf.d/supervisord.conf
 COPY entrypoint.sh      /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Volumen unificado: /data/.ollama = modelos, /data/agent = datos agent, /data/webui = datos webui
+# Volumen unificado: /data/.ollama = modelos, /data/agent = datos, /data/webui = webui
 VOLUME ["/data"]
 
 EXPOSE 8080
