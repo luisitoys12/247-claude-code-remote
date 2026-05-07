@@ -1,11 +1,17 @@
 #!/bin/sh
-# Crea config.json si no existe (el volumen puede sobreescribir /root/.247/)
+set -e
+
+# ── Crear directorios necesarios ──
+mkdir -p /root/.247/data
+mkdir -p /root/projects
+mkdir -p /var/log/supervisor
+mkdir -p /var/log/nginx
+
+# ── Config del agent si no existe (volumen puede estar vacío) ──
 CONFIG_FILE="/root/.247/config.json"
 
-mkdir -p /root/.247/data
-
 if [ ! -f "$CONFIG_FILE" ]; then
-  echo "[entrypoint] Config no encontrado, creando default..."
+  echo "[entrypoint] Creando config default del agent..."
   cat > "$CONFIG_FILE" << 'EOF'
 {
   "machine": {
@@ -21,9 +27,15 @@ if [ ! -f "$CONFIG_FILE" ]; then
   }
 }
 EOF
-  echo "[entrypoint] Config creado en $CONFIG_FILE"
+  echo "[entrypoint] Config creado OK"
 else
-  echo "[entrypoint] Config existente encontrado en $CONFIG_FILE"
+  echo "[entrypoint] Config existente encontrado"
 fi
 
-exec node dist/index.js
+# ── Verificar OPENROUTER_API_KEY ──
+if [ -z "$OPENROUTER_API_KEY" ]; then
+  echo "[entrypoint] ADVERTENCIA: OPENROUTER_API_KEY no configurado (chat OpenRouter no funcionará)"
+fi
+
+echo "[entrypoint] Iniciando supervisord (agent + web + nginx)..."
+exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf

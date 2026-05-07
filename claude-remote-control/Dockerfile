@@ -1,58 +1,87 @@
-# 247 Agent Dockerfile
-# Runs the agent server with terminal support via tmux
+# ─────────────────────────────────────────────────────────────
+# Stage 1: Build — compila agent + web Next.js
+# ─────────────────────────────────────────────────────────────
+FROM node:22-bookworm-slim AS builder
 
-# Node 22 requerido por engines field en package.json
-FROM node:22-bookworm-slim
-
-# Install system dependencies:
-# - tmux, git, curl, bash: runtime needs
-# - python3, make, g++, build-essential: compile native modules
-#   (node-pty-prebuilt-multiarch and better-sqlite3)
+# Dependencias de sistema para compilar módulos nativos
 RUN apt-get update && apt-get install -y \
-    tmux \
-    git \
-    curl \
-    bash \
-    python3 \
-    make \
-    g++ \
-    build-essential \
+    python3 make g++ build-essential curl git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pnpm
-RUN npm install -g pnpm
+RUN npm install -g pnpm turbo
 
-# Create app directory
 WORKDIR /app
 
-# Copy workspace/root config files
+# Copiar manifiestos primero (cache de capas Docker)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.json ./
+COPY apps/agent/package.json       ./apps/agent/
+COPY apps/web/package.json         ./apps/web/
+COPY packages/shared/package.json  ./packages/shared/
 
-# Copy package.json de cada workspace (para cache de install)
-COPY apps/agent/package.json ./apps/agent/
-COPY packages/shared/package.json ./packages/shared/
-
-# Install ALL dependencies
+# Instalar todas las dependencias (incluyendo devDependencies para build)
 RUN pnpm install --frozen-lockfile
 
-# Copy source code
-COPY apps/agent/ ./apps/agent/
+# Copiar todo el código fuente
+COPY apps/agent/     ./apps/agent/
+COPY apps/web/       ./apps/web/
 COPY packages/shared/ ./packages/shared/
 
-# Build: shared PRIMERO, luego agent
-RUN pnpm --filter 247-shared build && pnpm --filter 247-agent build
+# Build en orden correcto: shared → agent → web
+RUN pnpm --filter 247-shared build
+RUN pnpm --filter 247-agent build
+RUN pnpm --filter web build
 
-# Copy entrypoint script
+# ─────────────────────────────────────────────────────────────
+# Stage 2: Runtime — imagen ligera final
+# ─────────────────────────────────────────────────────────────
+FROM node:22-bookworm-slim AS runtime
+
+# Runtime deps: tmux (agent), nginx (proxy), supervisord (proceso manager)
+RUN apt-get update && apt-get install -y \
+    tmux git curl bash \
+    nginx \
+    supervisor \
+    python3 make g++ build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g pnpm
+
+WORKDIR /app
+
+# ── Copiar artefactos del builder ──
+# Workspace raíz
+COPY --from=builder /app/package.json          ./
+COPY --from=builder /app/pnpm-lock.yaml        ./
+COPY --from=builder /app/pnpm-workspace.yaml   ./
+COPY --from=builder /app/turbo.json            ./
+COPY --from=builder /app/tsconfig.json         ./
+
+# Agent (binarios compilados + fuente)
+COPY --from=builder /app/apps/agent/           ./apps/agent/
+COPY --from=builder /app/packages/shared/      ./packages/shared/
+
+# Web Next.js (solo lo necesario para producción)
+COPY --from=builder /app/apps/web/package.json        ./apps/web/
+COPY --from=builder /app/apps/web/.next/               ./apps/web/.next/
+COPY --from=builder /app/apps/web/public/              ./apps/web/public/
+COPY --from=builder /app/apps/web/next.config.js       ./apps/web/next.config.js
+
+# Instalar solo prod deps
+RUN pnpm install --frozen-lockfile --prod
+
+# ── Nginx config (reverse proxy) ──
+COPY nginx.conf /etc/nginx/nginx.conf
+
+# ── Supervisor config ──
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# ── Entrypoint ──
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Expose port
-EXPOSE 4678
+EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:4678/health || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
 
-# Start via entrypoint that ensures config exists
-WORKDIR /app/apps/agent
 CMD ["/entrypoint.sh"]
