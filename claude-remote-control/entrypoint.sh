@@ -1,15 +1,13 @@
 #!/bin/sh
 set -e
 
-# ── Crear directorios necesarios ──
 mkdir -p /root/.247/data
 mkdir -p /root/projects
 mkdir -p /var/log/supervisor
 mkdir -p /var/log/nginx
 
-# ── Config del agent si no existe (volumen puede estar vacío) ──
+# ── Config del agent si no existe ──
 CONFIG_FILE="/root/.247/config.json"
-
 if [ ! -f "$CONFIG_FILE" ]; then
   echo "[entrypoint] Creando config default del agent..."
   cat > "$CONFIG_FILE" << 'EOF'
@@ -28,14 +26,18 @@ if [ ! -f "$CONFIG_FILE" ]; then
 }
 EOF
   echo "[entrypoint] Config creado OK"
-else
-  echo "[entrypoint] Config existente encontrado"
 fi
 
-# ── Verificar OPENROUTER_API_KEY ──
-if [ -z "$OPENROUTER_API_KEY" ]; then
-  echo "[entrypoint] ADVERTENCIA: OPENROUTER_API_KEY no configurado (chat OpenRouter no funcionará)"
+# ── Validar variables de entorno requeridas ──
+if [ -z "$OPENROUTER_API_KEY" ] && [ -z "$OLLAMA_BASE_URL" ]; then
+  echo "[entrypoint] ERROR: Debes configurar al menos OPENROUTER_API_KEY o OLLAMA_BASE_URL"
+  echo "  fly secrets set OPENROUTER_API_KEY=sk-or-xxx"
+  echo "  fly secrets set OLLAMA_BASE_URL=http://mi-ollama:11434"
+  exit 1
 fi
 
-echo "[entrypoint] Iniciando supervisord (agent + web + nginx)..."
+[ -n "$OPENROUTER_API_KEY" ] && echo "[entrypoint] OpenRouter: OK"
+[ -n "$OLLAMA_BASE_URL" ]    && echo "[entrypoint] Ollama URL: $OLLAMA_BASE_URL"
+
+echo "[entrypoint] Iniciando supervisord..."
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf

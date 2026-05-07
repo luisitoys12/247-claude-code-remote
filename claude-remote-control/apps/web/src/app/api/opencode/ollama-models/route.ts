@@ -1,41 +1,39 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 
-/**
- * GET /api/opencode/ollama-models
- * Proxies to Ollama's /api/tags to fetch locally installed models.
- * Query param: baseUrl (optional, default from OLLAMA_BASE_URL env)
- */
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url)
-  const base =
-    searchParams.get('baseUrl') ??
-    process.env.OLLAMA_BASE_URL ??
-    'http://localhost:11434'
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? ''
+
+export async function GET() {
+  if (!OLLAMA_BASE_URL) {
+    return NextResponse.json(
+      { error: 'OLLAMA_BASE_URL no configurado', models: [] },
+      { status: 200 } // 200 para no romper el UI, solo muestra lista vacía
+    )
+  }
 
   try {
-    const res = await fetch(`${base}/api/tags`, {
-      headers: { 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(4000),
+    const res = await fetch(`${OLLAMA_BASE_URL}/api/tags`, {
+      next: { revalidate: 30 }, // cache 30s
     })
 
     if (!res.ok) {
       return NextResponse.json(
-        { error: `Ollama responded with ${res.status}`, models: [] },
-        { status: res.status }
+        { error: `No se pudo conectar a Ollama en ${OLLAMA_BASE_URL}`, models: [] },
+        { status: 200 }
       )
     }
 
     const data = await res.json()
-    const models = (data.models ?? []).map((m: { name: string }) => ({
-      id: m.name,
-      label: m.name,
+    const models = (data.models ?? []).map((m: { name: string; size: number }) => ({
+      id:   m.name,
+      name: m.name.replace(/:latest$/, ''),
+      size: m.size ? `${(m.size / 1e9).toFixed(1)}GB` : undefined,
     }))
 
-    return NextResponse.json({ models })
-  } catch (err) {
+    return NextResponse.json({ models, url: OLLAMA_BASE_URL })
+  } catch (e) {
     return NextResponse.json(
-      { error: 'Cannot reach Ollama — is it running?', models: [], details: String(err) },
-      { status: 503 }
+      { error: `Error conectando a Ollama: ${(e as Error).message}`, models: [] },
+      { status: 200 }
     )
   }
 }

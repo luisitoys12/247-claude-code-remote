@@ -1,5 +1,10 @@
 # fly.toml — 247 Claude Code Remote (Agent + Web unificado)
 # Deploy: cd claude-remote-control && fly deploy
+#
+# Secrets requeridos (configurar UNA VEZ con fly secrets set):
+#   fly secrets set OPENROUTER_API_KEY="sk-or-xxxxxxxxxxxx"
+#   fly secrets set OLLAMA_BASE_URL="http://mi-servidor-ollama:11434"
+#
 app = "247-claude-code-remote"
 primary_region = "dfw"
 
@@ -7,18 +12,16 @@ primary_region = "dfw"
   dockerfile = "./Dockerfile"
 
 [env]
-  NODE_ENV     = "production"
-  HOME         = "/root"
-  PORT         = "4678"
-  # OPENROUTER_API_KEY → configurar con: fly secrets set OPENROUTER_API_KEY=sk-or-xxx
-  # ANTHROPIC_API_KEY  → configurar con: fly secrets set ANTHROPIC_API_KEY=sk-ant-xxx
-  # OLLAMA_BASE_URL    → solo si usas Ollama externo, ej: http://mi-servidor:11434
+  NODE_ENV = "production"
+  HOME     = "/root"
+  PORT     = "4678"
+  # OLLAMA_BASE_URL y OPENROUTER_API_KEY van como secrets, no aquí
 
 [http_service]
-  internal_port       = 8080
-  force_https         = true
-  auto_stop_machines  = "stop"
-  auto_start_machines = true
+  internal_port        = 8080
+  force_https          = true
+  auto_stop_machines   = "stop"
+  auto_start_machines  = true
   min_machines_running = 0
 
   [http_service.concurrency]
