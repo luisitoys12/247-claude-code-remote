@@ -1,9 +1,9 @@
-# fly.toml — 247 Claude Code Remote (Agent + Web unificado)
+# fly.toml — 247 Claude Code Remote (Agent + Web + Ollama unificado)
 # Deploy: cd claude-remote-control && fly deploy
 #
-# Secrets requeridos (configurar UNA VEZ con fly secrets set):
-#   fly secrets set OPENROUTER_API_KEY="sk-or-xxxxxxxxxxxx"
-#   fly secrets set OLLAMA_BASE_URL="http://mi-servidor-ollama:11434"
+# Secrets disponibles:
+#   fly secrets set OPENROUTER_API_KEY="sk-or-xxx"     # para OpenRouter (opcional)
+#   fly secrets set DEFAULT_OLLAMA_MODEL="qwen2.5-coder:7b"  # modelo a descargar al arrancar
 #
 app = "247-claude-code-remote"
 primary_region = "dfw"
@@ -12,10 +12,12 @@ primary_region = "dfw"
   dockerfile = "./Dockerfile"
 
 [env]
-  NODE_ENV = "production"
-  HOME     = "/root"
-  PORT     = "4678"
-  # OLLAMA_BASE_URL y OPENROUTER_API_KEY van como secrets, no aquí
+  NODE_ENV         = "production"
+  HOME             = "/root"
+  PORT             = "4678"
+  OLLAMA_HOST      = "127.0.0.1:11434"
+  OLLAMA_BASE_URL  = "http://127.0.0.1:11434"
+  # DEFAULT_OLLAMA_MODEL → configura como secret si quieres pull automático
 
 [http_service]
   internal_port        = 8080
@@ -30,11 +32,17 @@ primary_region = "dfw"
     soft_limit = 20
 
 [[vm]]
-  memory   = "1gb"
+  # 2GB RAM: Ollama necesita ~1GB mínimo para modelos 7B
+  memory   = "2gb"
   cpu_kind = "shared"
-  cpus     = 1
+  cpus     = 2
 
 [[mounts]]
   source       = "agent_data"
   destination  = "/root/.247/data"
   initial_size = "1gb"
+
+[[mounts]]
+  source       = "ollama_models"
+  destination  = "/root/.ollama"
+  initial_size = "20gb"

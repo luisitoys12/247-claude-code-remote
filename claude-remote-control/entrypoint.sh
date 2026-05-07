@@ -3,6 +3,7 @@ set -e
 
 mkdir -p /root/.247/data
 mkdir -p /root/projects
+mkdir -p /root/.ollama/models
 mkdir -p /var/log/supervisor
 mkdir -p /var/log/nginx
 
@@ -25,19 +26,26 @@ if [ ! -f "$CONFIG_FILE" ]; then
   }
 }
 EOF
-  echo "[entrypoint] Config creado OK"
 fi
 
-# ── Validar variables de entorno requeridas ──
-if [ -z "$OPENROUTER_API_KEY" ] && [ -z "$OLLAMA_BASE_URL" ]; then
-  echo "[entrypoint] ERROR: Debes configurar al menos OPENROUTER_API_KEY o OLLAMA_BASE_URL"
-  echo "  fly secrets set OPENROUTER_API_KEY=sk-or-xxx"
-  echo "  fly secrets set OLLAMA_BASE_URL=http://mi-ollama:11434"
-  exit 1
+# ── Info de providers disponibles ──
+echo "[entrypoint] Ollama: interno en http://127.0.0.1:11434"
+[ -n "$OPENROUTER_API_KEY" ] \
+  && echo "[entrypoint] OpenRouter: OK" \
+  || echo "[entrypoint] OpenRouter: no configurado (opcional)"
+
+# ── Pull automático de modelo si se especifica DEFAULT_OLLAMA_MODEL ──
+# Ejemplo: fly secrets set DEFAULT_OLLAMA_MODEL=qwen2.5-coder:7b
+# El pull ocurre en background para no bloquear el arranque
+if [ -n "$DEFAULT_OLLAMA_MODEL" ]; then
+  echo "[entrypoint] Se descargará el modelo '$DEFAULT_OLLAMA_MODEL' tras arrancar Ollama..."
+  (
+    sleep 15  # esperar a que ollama serve esté listo
+    ollama pull "$DEFAULT_OLLAMA_MODEL" && \
+      echo "[entrypoint] Modelo '$DEFAULT_OLLAMA_MODEL' listo" || \
+      echo "[entrypoint] WARN: falló el pull de '$DEFAULT_OLLAMA_MODEL'"
+  ) &
 fi
 
-[ -n "$OPENROUTER_API_KEY" ] && echo "[entrypoint] OpenRouter: OK"
-[ -n "$OLLAMA_BASE_URL" ]    && echo "[entrypoint] Ollama URL: $OLLAMA_BASE_URL"
-
-echo "[entrypoint] Iniciando supervisord..."
+echo "[entrypoint] Iniciando supervisord (ollama + agent + web + nginx)..."
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
