@@ -39,10 +39,12 @@ RUN apt-get update && apt-get install -y \
 # Instalar Ollama
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
-# Instalar Open WebUI en virtualenv para aislar dependencias
+# Instalar Open WebUI en virtualenv — CPU-only torch para reducir imagen (<8GB Fly.io limit)
 RUN python3 -m venv /opt/webui-venv && \
-    /opt/webui-venv/bin/pip install --upgrade pip && \
-    /opt/webui-venv/bin/pip install open-webui
+    /opt/webui-venv/bin/pip install --upgrade pip --no-cache-dir && \
+    /opt/webui-venv/bin/pip install --no-cache-dir \
+        --extra-index-url https://download.pytorch.org/whl/cpu \
+        open-webui
 
 RUN npm install -g pnpm
 
@@ -68,7 +70,7 @@ VOLUME ["/data"]
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=5 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
     CMD curl -f http://localhost:8080/health || exit 1
 
 CMD ["/entrypoint.sh"]
