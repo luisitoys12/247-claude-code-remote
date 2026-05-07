@@ -29,11 +29,12 @@ RUN pnpm --filter 247-agent  build
 # ─────────────────────────────────────────────────────────────
 FROM node:22-bookworm-slim AS runtime
 
-# Deps de sistema
+# Deps de sistema (zstd requerido por el instalador de Ollama)
 RUN apt-get update && apt-get install -y \
     tmux git curl bash ca-certificates \
     nginx supervisor \
     python3 make g++ build-essential \
+    zstd \
     && rm -rf /var/lib/apt/lists/*
 
 # Instalar Ollama (binario oficial)
