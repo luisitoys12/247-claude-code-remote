@@ -42,10 +42,9 @@ COPY packages/shared/ ./packages/shared/
 # Build: shared PRIMERO, luego agent
 RUN pnpm --filter 247-shared build && pnpm --filter 247-agent build
 
-# Create persistent data directory and default config so app starts without init
-RUN mkdir -p /root/.247/data && \
-    echo '{"machine":{"id":"fly-agent","name":"247-fly-agent"},"agent":{"port":4678},"projects":{"basePath":"/root/projects","whitelist":[]}}' \
-    > /root/.247/config.json
+# Copy entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # Expose port
 EXPOSE 4678
@@ -54,6 +53,6 @@ EXPOSE 4678
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:4678/health || exit 1
 
-# Start agent
+# Start via entrypoint that ensures config exists
 WORKDIR /app/apps/agent
-CMD ["node", "dist/index.js"]
+CMD ["/entrypoint.sh"]
